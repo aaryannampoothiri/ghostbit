@@ -274,7 +274,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-6 pb-10 pt-10 md:pt-12">
+      <div className="w-full px-4 pb-10 pt-10 md:pt-12">
         <SectionReveal>
           <h1 className="mb-8 text-3xl font-semibold tracking-tight text-emerald-400 md:text-4xl">GhostBit Dashboard</h1>
         </SectionReveal>

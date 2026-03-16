@@ -195,14 +195,14 @@ export default function HomePage() {
       />
 
       <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-start px-6">
+        <div className="w-full flex h-16 items-center justify-start px-4">
           <a href="/" aria-label="GhostBit home">
             <img src="/logo.png" alt="GhostBit logo" className="h-[3.75rem] w-auto object-contain" />
           </a>
         </div>
       </header>
 
-      <section className="hero-grid relative mx-auto max-w-6xl px-6 pb-20 pt-16 md:pt-24">
+      <section className="hero-grid relative w-full px-4 pb-20 pt-16 md:pt-24">
         <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
           <SectionReveal>
             <p className="mb-3 text-xs uppercase tracking-[0.3em] text-emerald-400">Invisible by Design</p>
@@ -232,7 +232,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-6 pb-10">
+      <section className="w-full px-4 pb-10">
         <SectionReveal>
           <div className="grid gap-5 md:grid-cols-3">
             {featureCards.map((card) => (
