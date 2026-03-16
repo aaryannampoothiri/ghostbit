@@ -322,14 +322,13 @@ export default function DashboardPage() {
               </div>
 
               <CapacityMeter capacityBits={analysis?.capacity_bits ?? 0} usedBits={usedBits || estimatedUsedBits} />
-
               {analysis ? (
                 <p className="text-xs text-slate-400">
                   Eligible Pixels: {analysis.eligible_pixels.toLocaleString()} · Threshold: {analysis.variance_threshold.toFixed(2)}
                 </p>
               ) : null}
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 items-center">
                 <motion.button
                   whileHover={{ y: -1, scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
@@ -349,6 +348,15 @@ export default function DashboardPage() {
                 >
                   Hide Message
                 </motion.button>
+                {stegoUrl && (
+                  <a
+                    href={stegoUrl}
+                    download="stego-image.png"
+                    className="rounded-md border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/20 hover:text-white ml-2"
+                  >
+                    Download Image
+                  </a>
+                )}
               </div>
             </form>
             </motion.section>
