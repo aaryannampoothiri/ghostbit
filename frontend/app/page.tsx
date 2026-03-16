@@ -197,7 +197,7 @@ export default function HomePage() {
       <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
         <div className="w-full flex h-16 items-center justify-start px-4">
           <a href="/" aria-label="GhostBit home">
-            <img src="/logo.png" alt="GhostBit logo" className="h-[3.75rem] w-auto object-contain" />
+            <img src="/logo.png" alt="GhostBit logo" className="h-[5rem] w-auto object-contain" />
           </a>
         </div>
       </header>
@@ -216,7 +216,7 @@ export default function HomePage() {
           </SectionReveal>
 
           <SectionReveal>
-            <div className="flex items-center justify-center lg:justify-end">
+            <div className="flex items-center justify-center lg:justify-end lg:pr-16">
               <motion.a
                 href="/dashboard"
                 whileHover={{ y: -3 }}

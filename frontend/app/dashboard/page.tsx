@@ -233,8 +233,8 @@ export default function DashboardPage() {
 
       <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-950/70 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-          <a href="/" aria-label="GhostBit home">
-            <img src="/logo.png" alt="GhostBit logo" className="h-[3.75rem] w-auto object-contain" />
+          <a href="/" aria-label="GhostBit home" className="mr-4">
+            <img src="/logo.png" alt="GhostBit logo" className="h-[5rem] w-auto object-contain" />
           </a>
           <Link
             href="/"
