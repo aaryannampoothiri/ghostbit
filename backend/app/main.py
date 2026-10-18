@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from .schemas import AnalyzeResponse, ExtractResponse
-from .stego import analyze_capacity, embed_message, extract_message
+from .stego import analyze_capacity, embed_message, extract_message, purge_message
 
 
 app = FastAPI(title="GhostBit API", version="1.0.0")
@@ -77,7 +77,13 @@ async def embed(
 @app.post("/api/extract", response_model=ExtractResponse)
 async def extract(file: UploadFile = File(...), key: str = Form(...)) -> JSONResponse:
     if not key.strip():
-        raise HTTPException(status_code=400, detail="Secret key is required.")
+        raise HTTPException(status_code=400, detail="Secret key cannot be empty.")
+
+    if file.filename and not file.filename.lower().endswith(".png"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file format: Stego images must be PNG (.png). JPEG/compressed formats corrupt hidden data."
+        )
 
     file_bytes = await file.read()
     if not file_bytes:
@@ -85,7 +91,38 @@ async def extract(file: UploadFile = File(...), key: str = Form(...)) -> JSONRes
 
     try:
         message = extract_message(file_bytes, key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Extraction failed: {exc}") from exc
 
     return JSONResponse(content=ExtractResponse(message=message).model_dump())
+
+
+@app.post("/api/purge")
+async def purge(file: UploadFile = File(...), key: str = Form(...)) -> StreamingResponse:
+    if not key.strip():
+        raise HTTPException(status_code=400, detail="Secret key cannot be empty.")
+
+    if file.filename and not file.filename.lower().endswith(".png"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid file format: Stego images must be PNG (.png). JPEG/compressed formats corrupt hidden data."
+        )
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    try:
+        clean_png_bytes, purged_bits = purge_message(file_bytes, key)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Purge failed: {exc}") from exc
+
+    headers = {
+        "Content-Disposition": 'attachment; filename="ghostbit-purged.png"',
+        "X-GhostBit-Purged-Bits": str(purged_bits),
+    }
+    return StreamingResponse(iter([clean_png_bytes]), media_type="image/png", headers=headers)

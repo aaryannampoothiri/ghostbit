@@ -53,7 +53,9 @@ def _stable_image_fingerprint(image_array: np.ndarray) -> str:
 
 
 def _variance_map(image_array: np.ndarray) -> tuple[np.ndarray, float]:
-    gray = np.dot(image_array[..., :3], [0.299, 0.587, 0.114]).astype(np.float64)
+    sanitized = image_array.copy()
+    sanitized &= 0xFE
+    gray = np.dot(sanitized[..., :3], [0.299, 0.587, 0.114]).astype(np.float64)
     height, width = gray.shape
     block_vars: list[float] = []
 
@@ -110,15 +112,18 @@ def _encrypt_message(message: str, secret_key: str) -> bytes:
 
 def _decrypt_message(payload: bytes, secret_key: str) -> str:
     if len(payload) < NONCE_SIZE + TAG_SIZE:
-        raise ValueError("Invalid payload length.")
+        raise ValueError("No hidden message found in this image.")
 
     nonce = payload[:NONCE_SIZE]
     tag = payload[NONCE_SIZE : NONCE_SIZE + TAG_SIZE]
     ciphertext = payload[NONCE_SIZE + TAG_SIZE :]
     key = _derive_aes_key(secret_key)
     cipher = AES.new(key, AES.MODE_GCM, nonce=nonce)
-    plaintext = cipher.decrypt_and_verify(ciphertext, tag)
-    return plaintext.decode("utf-8")
+    try:
+        plaintext = cipher.decrypt_and_verify(ciphertext, tag)
+        return plaintext.decode("utf-8")
+    except ValueError as exc:
+        raise ValueError("Incorrect secret key: Decryption failed.") from exc
 
 
 def _bytes_to_bits(data: bytes) -> list[int]:
@@ -189,12 +194,49 @@ def extract_message(image_bytes: bytes, secret_key: str) -> str:
     header_bits = [image_array[row, col, 2] & 1 for row, col in traversal_map[: HEADER_LEN_BYTES * 8]]
     encrypted_payload_len = int.from_bytes(_bits_to_bytes(header_bits), byteorder="big")
 
+    if encrypted_payload_len == 0 or encrypted_payload_len < NONCE_SIZE + TAG_SIZE:
+        raise ValueError("No hidden message found in this image.")
+
     total_payload_bits = encrypted_payload_len * 8
     start = HEADER_LEN_BYTES * 8
     end = start + total_payload_bits
     if end > len(traversal_map):
-        raise ValueError("Payload marker is invalid for this image/key pair.")
+        raise ValueError("Incorrect secret key: No hidden message found for this key.")
 
     payload_bits = [image_array[row, col, 2] & 1 for row, col in traversal_map[start:end]]
     encrypted_payload = _bits_to_bytes(payload_bits)
     return _decrypt_message(encrypted_payload, secret_key)
+
+
+def purge_message(image_bytes: bytes, secret_key: str) -> tuple[bytes, int]:
+    image_array = _image_to_array(image_bytes)
+    coordinates, _, image_fingerprint = _high_entropy_coordinates(image_array)
+    traversal_map = _seeded_scatter(coordinates, secret_key, image_fingerprint)
+
+    if len(traversal_map) < HEADER_LEN_BYTES * 8:
+        raise ValueError("Image does not contain a valid GhostBit payload.")
+
+    header_bits = [image_array[row, col, 2] & 1 for row, col in traversal_map[: HEADER_LEN_BYTES * 8]]
+    encrypted_payload_len = int.from_bytes(_bits_to_bytes(header_bits), byteorder="big")
+
+    if encrypted_payload_len == 0 or encrypted_payload_len < NONCE_SIZE + TAG_SIZE:
+        raise ValueError("No hidden message found in this image to purge.")
+
+    total_payload_bits = encrypted_payload_len * 8
+    start = HEADER_LEN_BYTES * 8
+    end = start + total_payload_bits
+    if end > len(traversal_map):
+        raise ValueError("Incorrect secret key: No hidden message found for this key.")
+
+    payload_bits = [image_array[row, col, 2] & 1 for row, col in traversal_map[start:end]]
+    encrypted_payload = _bits_to_bytes(payload_bits)
+    # Ensure key is valid before modifying pixels
+    _decrypt_message(encrypted_payload, secret_key)
+
+    # Zero out the header and payload bits
+    for row, col in traversal_map[:end]:
+        image_array[row, col, 2] &= 0xFE
+
+    output_buffer = BytesIO()
+    Image.fromarray(image_array, mode="RGB").save(output_buffer, format="PNG", optimize=False)
+    return output_buffer.getvalue(), end
