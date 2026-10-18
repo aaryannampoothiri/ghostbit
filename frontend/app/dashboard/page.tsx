@@ -15,6 +15,16 @@ type AnalyzeResult = {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
 
+function formatApiError(err: unknown, fallback: string): string {
+  if (err instanceof Error) {
+    if (err.message.toLowerCase().includes("failed to fetch")) {
+      return "Unable to connect to the GhostBit backend. Please ensure the backend server is running and NEXT_PUBLIC_API_BASE is configured.";
+    }
+    return err.message;
+  }
+  return fallback;
+}
+
 function SectionReveal({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const isInView = useInView(ref, { once: true, margin: "-60px" });
@@ -132,7 +142,7 @@ export default function DashboardPage() {
       setAnalysis(data);
       setStatus("Entropy map ready.");
     } catch (analyzeError) {
-      setError(analyzeError instanceof Error ? analyzeError.message : "Analyze failed");
+      setError(formatApiError(analyzeError, "Analyze failed"));
       setStatus("");
     } finally {
       setLoading(false);
@@ -182,7 +192,7 @@ export default function DashboardPage() {
       setStegoUrl(objectUrl);
       setStatus("Stego image generated in PNG format.");
     } catch (embedError) {
-      setError(embedError instanceof Error ? embedError.message : "Embed failed");
+      setError(formatApiError(embedError, "Embed failed"));
       setStatus("");
     } finally {
       setLoading(false);
@@ -228,8 +238,7 @@ export default function DashboardPage() {
       setExtractError(null);
       setError("");
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Extraction failed";
-      setExtractError(msg);
+      setExtractError(formatApiError(err, "Extraction failed"));
       setStatus("");
     } finally {
       setLoading(false);
@@ -331,8 +340,7 @@ export default function DashboardPage() {
       setStatus("Message purged successfully. Download your clean image.");
       setPurgeError(null);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Purge failed";
-      setPurgeError(msg);
+      setPurgeError(formatApiError(err, "Purge failed"));
       setStatus("");
     } finally {
       setPurgeLoading(false);

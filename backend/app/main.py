@@ -1,6 +1,6 @@
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, Response
 
 from .schemas import AnalyzeResponse, ExtractResponse
 from .stego import analyze_capacity, embed_message, extract_message, purge_message
@@ -11,9 +11,10 @@ app = FastAPI(title="GhostBit API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*", "X-GhostBit-Capacity-Bits", "X-GhostBit-Used-Bits", "X-GhostBit-Usage-Percent", "X-GhostBit-Image-Fingerprint", "X-GhostBit-Purged-Bits"],
 )
 
 
@@ -47,7 +48,7 @@ async def embed(
     file: UploadFile = File(...),
     message: str = Form(...),
     key: str = Form(...),
-) -> StreamingResponse:
+) -> Response:
     if not key.strip():
         raise HTTPException(status_code=400, detail="Secret key is required.")
     if not message:
@@ -71,7 +72,7 @@ async def embed(
         "X-GhostBit-Usage-Percent": f"{result.usage_percent:.2f}",
         "X-GhostBit-Image-Fingerprint": result.image_fingerprint,
     }
-    return StreamingResponse(iter([result.png_bytes]), media_type="image/png", headers=headers)
+    return Response(content=result.png_bytes, media_type="image/png", headers=headers)
 
 
 @app.post("/api/extract", response_model=ExtractResponse)
@@ -100,7 +101,7 @@ async def extract(file: UploadFile = File(...), key: str = Form(...)) -> JSONRes
 
 
 @app.post("/api/purge")
-async def purge(file: UploadFile = File(...), key: str = Form(...)) -> StreamingResponse:
+async def purge(file: UploadFile = File(...), key: str = Form(...)) -> Response:
     if not key.strip():
         raise HTTPException(status_code=400, detail="Secret key cannot be empty.")
 
@@ -125,4 +126,4 @@ async def purge(file: UploadFile = File(...), key: str = Form(...)) -> Streaming
         "Content-Disposition": 'attachment; filename="ghostbit-purged.png"',
         "X-GhostBit-Purged-Bits": str(purged_bits),
     }
-    return StreamingResponse(iter([clean_png_bytes]), media_type="image/png", headers=headers)
+    return Response(content=clean_png_bytes, media_type="image/png", headers=headers)

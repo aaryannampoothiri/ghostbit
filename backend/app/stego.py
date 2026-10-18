@@ -16,6 +16,7 @@ VARIANCE_QUANTILE = 0.65
 HEADER_LEN_BYTES = 4
 NONCE_SIZE = 12
 TAG_SIZE = 16
+MAX_COVER_DIMENSION = 1600
 
 
 @dataclass(frozen=True)
@@ -36,13 +37,16 @@ class EmbedResult:
     image_fingerprint: str
 
 
-def _open_rgb_image(image_bytes: bytes) -> Image.Image:
+def _open_rgb_image(image_bytes: bytes, max_dimension: int | None = None) -> Image.Image:
     image = Image.open(BytesIO(image_bytes))
-    return image.convert("RGB")
+    image = image.convert("RGB")
+    if max_dimension is not None and max(image.size) > max_dimension:
+        image.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+    return image
 
 
-def _image_to_array(image_bytes: bytes) -> np.ndarray:
-    image = _open_rgb_image(image_bytes)
+def _image_to_array(image_bytes: bytes, max_dimension: int | None = None) -> np.ndarray:
+    image = _open_rgb_image(image_bytes, max_dimension=max_dimension)
     return np.array(image, dtype=np.uint8)
 
 
@@ -57,26 +61,22 @@ def _variance_map(image_array: np.ndarray) -> tuple[np.ndarray, float]:
     sanitized &= 0xFE
     gray = np.dot(sanitized[..., :3], [0.299, 0.587, 0.114]).astype(np.float64)
     height, width = gray.shape
-    block_vars: list[float] = []
 
-    for row in range(0, height, BLOCK_SIZE):
-        for col in range(0, width, BLOCK_SIZE):
-            block = gray[row : row + BLOCK_SIZE, col : col + BLOCK_SIZE]
-            if block.size == 0:
-                continue
-            block_vars.append(float(np.var(block)))
+    pad_h = (BLOCK_SIZE - (height % BLOCK_SIZE)) % BLOCK_SIZE
+    pad_w = (BLOCK_SIZE - (width % BLOCK_SIZE)) % BLOCK_SIZE
+    if pad_h > 0 or pad_w > 0:
+        gray_padded = np.pad(gray, ((0, pad_h), (0, pad_w)), mode="edge")
+    else:
+        gray_padded = gray
 
-    threshold = float(np.quantile(block_vars, VARIANCE_QUANTILE)) if block_vars else 0.0
-    variance_map = np.zeros((height, width), dtype=np.float64)
+    h_pad, w_pad = gray_padded.shape
+    blocks = gray_padded.reshape(h_pad // BLOCK_SIZE, BLOCK_SIZE, w_pad // BLOCK_SIZE, BLOCK_SIZE).swapaxes(1, 2)
+    block_vars = np.var(blocks, axis=(2, 3))
+    block_vars_flat = block_vars.flatten()
 
-    idx = 0
-    for row in range(0, height, BLOCK_SIZE):
-        for col in range(0, width, BLOCK_SIZE):
-            block = gray[row : row + BLOCK_SIZE, col : col + BLOCK_SIZE]
-            if block.size == 0:
-                continue
-            variance_map[row : row + block.shape[0], col : col + block.shape[1]] = block_vars[idx]
-            idx += 1
+    threshold = float(np.quantile(block_vars_flat, VARIANCE_QUANTILE)) if block_vars_flat.size else 0.0
+    var_map_padded = np.repeat(np.repeat(block_vars, BLOCK_SIZE, axis=0), BLOCK_SIZE, axis=1)
+    variance_map = var_map_padded[:height, :width]
 
     return variance_map, threshold
 
@@ -138,7 +138,7 @@ def _bits_to_bytes(bits: list[int]) -> bytes:
 
 
 def analyze_capacity(image_bytes: bytes) -> CapacityResult:
-    image_array = _image_to_array(image_bytes)
+    image_array = _image_to_array(image_bytes, max_dimension=MAX_COVER_DIMENSION)
     coordinates, threshold, image_fingerprint = _high_entropy_coordinates(image_array)
     capacity_bits = len(coordinates)
     return CapacityResult(
@@ -151,7 +151,7 @@ def analyze_capacity(image_bytes: bytes) -> CapacityResult:
 
 
 def embed_message(image_bytes: bytes, message: str, secret_key: str) -> EmbedResult:
-    image_array = _image_to_array(image_bytes)
+    image_array = _image_to_array(image_bytes, max_dimension=MAX_COVER_DIMENSION)
     coordinates, _, image_fingerprint = _high_entropy_coordinates(image_array)
     traversal_map = _seeded_scatter(coordinates, secret_key, image_fingerprint)
 
